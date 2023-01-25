@@ -1,1 +1,1 @@
-# Kid-named-Roboti-Finger
+# Kid named Robotić Finger
