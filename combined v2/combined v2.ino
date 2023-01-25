@@ -54,7 +54,7 @@ void WIFISERVOsetup(){
     Serial.begin(9600);
     
     // Connecting to the servo at pin 15
-    motoric.attach(15);
+    motoric.attach(15, 500, 2400);
 
     /* Connecting to the WiFi
     WiFiClient client; int retries = 0;
@@ -92,10 +92,10 @@ void setup()
     {
         motoric.write(180);
         lcd.print("**");
-        delay(250);
+        delay(600);
         motoric.write(0);
         lcd.print("**");
-        delay(250);
+        delay(600);
     }
     lcd.print("*]");
     delay(500);
