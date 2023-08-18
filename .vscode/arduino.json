@@ -1,0 +1,14 @@
+{
+    "configuration": "xtal=80,vt=flash,exception=disabled,eesz=4M,ip=lm2f,dbg=Disabled,lvl=None____,wipe=none,baud=115200",
+    "board": "esp8266:esp8266:nodemcu",
+    "sketch": "NodeMCU logic\\\\NodeMCU logic.ino",
+    "includePath": [
+        "C:/Users/Milan/AppData/Local/Arduino15/**",
+        "C:/Users/Milan/AppData/Local/Arduino15/packages/esp8266/hardware/esp8266/2.5.0/libraries",
+        "C:/Users/Milan/AppData/Local/Arduino15/packages/arduino/hardware/avr/1.8.6/libraries",
+        "C:/Users/Milan/AppData/Local/Arduino15/libraries",
+        "C:/Users/Milan/AppData/Local/Arduino15/staging/libraries"
+    ],
+    "port": "COM5",
+    "output": "build"
+}
