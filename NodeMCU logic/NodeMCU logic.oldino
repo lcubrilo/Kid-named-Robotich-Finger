@@ -1,16 +1,13 @@
 //------------------------------| Configuration and Initialization |------------------------------
 #pragma region 
-
-#include "config.h"
-
 #include <LiquidCrystal.h>
 const int rs=D1, en=D2, d4=D4, d5=D5, d6=D6, d7=D7;
 LiquidCrystal lcd(rs,en,d4,d5,d6,d7); //select the pins used on the LCD panel
 
-#define btnNEXT   1
-#define btnUP     3
-#define btnDOWN   5
-#define btnNONE   7
+#define btnNEXT   0
+#define btnUP     1
+#define btnDOWN   2
+#define btnNONE   5
 
 int lcd_key     = 0;
 int previous_operation = btnNEXT;
@@ -21,34 +18,30 @@ Servo motoric;
 
 #include <ESP8266WiFi.h>
 WiFiClient client;
-
+const char *ssid = "HUAWEI P10 lite";
+const char *password = "knin2022";
 #pragma endregion
 
 //------------------------------| Main Application Flow |------------------------------
 #pragma region 
 void setup()
 {
-    Serial.begin(9600);
+    LCDsetup();
+    WIFISERVOsetup();
 
-    lcd.begin(16, 2);
-    lcd.clear();  
-    
-    motoric.attach(0, 500, 2400);
-
-    // loading animation + servo wiggle/unstuck
     clearLCD();
     lcd.setCursor(0,0);
     lcd.print("LOADING");
     lcd.setCursor(0,1);
     lcd.print("[*");
 
-    motoric.write(IDLE_POSITION);
+    motoric.write(0);
     for(int i = 1; i < 4; i++)
     {
-        motoric.write(PUSH_BUTTON);
+        motoric.write(180);
         lcd.print("**");
         delay(600);
-        motoric.write(IDLE_POSITION);
+        motoric.write(0);
         lcd.print("**");
         delay(600);
     }
@@ -59,26 +52,31 @@ void setup()
 }
 
 int curr_cycle = -1;
-int num_cycles = DEFAULT_NUM_CYCLES;
-int dur_cycle = DEFAULT_DUR_CYCLES;
+int num_cycles = 20;
+int dur_cycle = 30;
 int start_time;
 
 void loop()
 {
     showElapsedTime();
 
-    if (curr_cycle <= 0)  
-        userMenu(); // User selects number of cycles and length of cycles
+    if (curr_cycle > 0)  // Everything setted up, running the clicking operations
+        clickingProcedure();
+
     else
-        clickingProcedure(); // User setup everything, running the clicking operations
+        userMenu();
 
     lcd_key = read_LCD_buttons(); // read input from the buttons
     handleButtonEvents(lcd_key);
 }
 #pragma endregion
 
-//------------------------------| Shield LCD |------------------------------
+//------------------------------| LCD and Button Component/Module |------------------------------
 #pragma region 
+void LCDsetup(){
+    lcd.begin(16, 2);
+    lcd.clear();  
+}
 
 void clearLCD()
 {
@@ -90,7 +88,7 @@ void clearLCD()
 
 void showElapsedTime()
 {
-    lcd.setCursor(8, 1);
+    lcd.setCursor(0, 1);
     lcd.print("                ");
     String output = formatTime_old();
     int n = output.length();
@@ -126,59 +124,44 @@ String formatTime_old()
     }
 }
 
+int read_LCD_buttons()
+{
+    adc_key_in = analogRead(0);      // read the value from the sensor 
+    // my buttons when read are centered at these valies: 18, 236, 522, 802
+    // that's roughly whole-number multiple of 256
+    // rounded to closest odd multiple of 128 
+    if (adc_key_in > 1408)
+        return adc_key_in; // We make this the 1st option for speed reasons since it will be the most likely result
+    
+    if (adc_key_in < 128)
+        return btnNEXT;
+    
+    if (adc_key_in < 384)
+        return btnUP;
+    
+    if (adc_key_in < 640)
+        return btnDOWN; 
+    
+    if (adc_key_in < 896)
+        return btnNONE;  // when all others fail, return this...
+}
+
 void userMenu()
 {
     if (curr_cycle == 0) // Still setting up the duration of cycle
     {
         lcd.setCursor(0, 0);
         lcd.print("Cycle length: ");
-
         lcd.setCursor(0, 1);
-        if(dur_cycle < 10)
-            lcd.print(" ");
-        
         lcd.print(String(dur_cycle) + " mins");
     }
     else if (curr_cycle == -1)  // First setting up the number of cycles
     {
         lcd.setCursor(0, 0);
         lcd.print("Num cycles: ");
-
         lcd.setCursor(0, 1);
-        if(num_cycles < 10)
-            lcd.print(" ");
-
         lcd.print(String(num_cycles) + " times");
     }
-}
-
-#pragma endregion
-
-//------------------------------| Shield Buttons |------------------------------
-#pragma region 
-
-int read_LCD_buttons()
-{
-    adc_key_in = analogRead(0);      // read the value from the sensor 
-    // my buttons when read are centered at these valius: 18, 236, 522, 802
-    // that's roughly EVEN multiples of 128 (0, 256, 512, 768)
-    // so midpoints are going to be around ODD multiples of 128
-    int coefficient = 128;
-    
-    //if (adc_key_in > 1408)
-        //return adc_key_in; // We make this the 1st option for speed reasons since it will be the most likely result
-    
-    if (adc_key_in < btnNEXT * coefficient) // this one gives off smallest value
-        return btnNEXT;
-    
-    if (adc_key_in < btnUP * coefficient) // etc in order of value size
-        return btnUP;
-    
-    if (adc_key_in < btnDOWN * coefficient)
-        return btnDOWN; 
-    
-    //if (adc_key_in < btnNONE * coefficient)
-    return btnNONE;  
 }
 
 void handleButtonEvents(int lcd_key)
@@ -201,7 +184,7 @@ void handleButtonEvents(int lcd_key)
             if (curr_cycle == 1) // first button click commenced
             {
                 start_time = millis();
-                lcd.print("STARTING..." + String(start_time));
+                lcd.print("STARTING..."+String(start_time));
                 delay(400);
             }
 
@@ -243,21 +226,27 @@ void handleButtonEvents(int lcd_key)
 
 //------------------------------| Servo Motor Component/Module |------------------------------
 #pragma region 
+void servoSetup()
+{
+    // Opening the serial connection
+    Serial.begin(9600);
+    
+    // Connecting to the servo at pin ~~15~~ 0
+    motoric.attach(0, 500, 2400);
+}
 
 void clickingProcedure()
 {
     lcd.setCursor(0,0);
     lcd.print("Cycle [" + String(curr_cycle) + "/" + String(num_cycles) + "]");
-    lcd.setCursor(0,1);
-    lcd.print(String(dur_cycle) + "min");
-    motoric.write(PUSH_BUTTON);
-    delay(ONE_SECOND);
-    motoric.write(IDLE_POSITION);
+    motoric.write(180);
+    delay(995); //accounting for a 10s delay each 30min of device operation
+    motoric.write(0);
     for (int i = 0; i < dur_cycle; i++){
         for(int j = 0; j < 60; j++){
             if (i == dur_cycle - 1 && j == 59)
                 continue;                    
-            delay(ONE_SECOND);
+            delay(995); //accounting for a 10s delay each 30min of device operation
             showElapsedTime();
         }
     }
@@ -271,9 +260,9 @@ void clickingProcedure()
 
 void finishedProcedure()
 {
-    motoric.write(PUSH_BUTTON);
-    delay(ONE_SECOND);
-    motoric.write(IDLE_POSITION);
+    motoric.write(180);
+    delay(995); //accounting for a 10s delay each 30min of device operation
+    motoric.write(0);
     clearLCD();
     lcd.setCursor(0,0);
     lcd.print("Done all " + String(num_cycles) + "cycles");
@@ -285,10 +274,10 @@ void finishedProcedure()
     lcd.print("Total " + time_output);
     while(true)
     {
-        delay(ONE_SECOND);
+        delay(995); //accounting for a 10s delay each 30min of device operation
         lcd.setCursor(15,1);
         lcd.print(".");
-        delay(ONE_SECOND); 
+        delay(995); //accounting for a 10s delay each 30min of device operation
         lcd.setCursor(15,1);
         lcd.print(" ");
     }
@@ -303,7 +292,7 @@ void WIFIsetup()
     int retries = 0;
     while ((WiFi.status() != WL_CONNECTED)) {
         retries++;
-        delay(ONE_SECOND);
+        delay(995); //accounting for a 10s delay each 30min of device operation
         Serial.print(".");
         if (retries > 14) {
           Serial.println(F("WiFi connection FAILED"));
