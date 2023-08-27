@@ -61,13 +61,12 @@ void setup()
 int curr_cycle = -1;
 int num_cycles = DEFAULT_NUM_CYCLES;
 int dur_cycle = DEFAULT_DUR_CYCLES;
-int start_time;
+int time_since_last_click;
+int time_since_last_blink = 0;
 
 void loop()
 {
-    showElapsedTime();
-
-    if (curr_cycle <= 0)  
+    if (curr_cycle <= 0)
         userMenu(); // User selects number of cycles and length of cycles
     else
         clickingProcedure(); // User setup everything, running the clicking operations
@@ -88,10 +87,11 @@ void clearLCD()
     lcd.print("                ");
 }
 
-void showElapsedTime()
+void showRemainingTime()
 {
-    lcd.setCursor(8, 1);
-    lcd.print("                ");
+    lcd.setCursor(0,1);
+    lcd.print("Tap soon ->");
+
     String output = formatTime_old();
     int n = output.length();
     lcd.setCursor(16-n, 1);
@@ -100,34 +100,42 @@ void showElapsedTime()
 
 String formatTime_old()
 {
-    int seconds = (millis()-start_time)/1000;
+    int time_elapse = (millis() - time_since_last_click)/1000;
+    int seconds = dur_cycle*60 - time_elapse;
     int minutes = seconds/60; 
-    int hours = minutes/60;
 
     if (seconds < 99)
-        return String(seconds) + "s";
+        return "  " + String(seconds) + "s";
 
-    else{
-        seconds %= 60;
-        String temp = String(seconds) + "s";
-        if (temp.length()==2)
-            temp = "0" + temp;
+    seconds %= 60;
+    String temp = String(seconds);
+    if (seconds<10)
+        temp = "0" + temp;
+      
+    temp = String(minutes) + ":" + temp;
+    if(minutes<10)
+      temp = "0" + temp;
 
-        if (minutes < 99)
-            return String(minutes) + "m" + temp;
+    return temp;
+}
 
-        minutes %= 60;
-        temp = String(minutes) + "m";
-        if (temp.length() == 5)
-            temp = "0" + temp;
-        
-        return String(hours) + "h" + temp;
-        
+void blinkCorner(){
+    if(millis()-time_since_last_blink > 1500)
+    {
+        time_since_last_blink = millis();
+        lcd.setCursor(15, 1);
+        lcd.print(".");
+    }
+    else if (millis()-time_since_last_blink > 750)
+    {
+      lcd.setCursor(15, 1);
+      lcd.print(" ");
     }
 }
 
 void userMenu()
 {
+    blinkCorner();
     if (curr_cycle == 0) // Still setting up the duration of cycle
     {
         lcd.setCursor(0, 0);
@@ -138,6 +146,7 @@ void userMenu()
             lcd.print(" ");
         
         lcd.print(String(dur_cycle) + " mins");
+
     }
     else if (curr_cycle == -1)  // First setting up the number of cycles
     {
@@ -200,9 +209,12 @@ void handleButtonEvents(int lcd_key)
 
             if (curr_cycle == 1) // first button click commenced
             {
-                start_time = millis();
-                lcd.print("STARTING..." + String(start_time));
+                lcd.print("STARTING...");
                 delay(400);
+                time_since_last_click = millis();
+                motoric.write(PUSH_BUTTON);
+                delay(ONE_SECOND);
+                motoric.write(IDLE_POSITION);
             }
 
             else // selected first number, now the second
@@ -248,32 +260,30 @@ void clickingProcedure()
 {
     lcd.setCursor(0,0);
     lcd.print("Cycle [" + String(curr_cycle) + "/" + String(num_cycles) + "]");
-    lcd.setCursor(0,1);
-    lcd.print(String(dur_cycle) + "min");
+
+    int sec_elapsed = (millis() - time_since_last_click)/1000;
+    int sec_remaining = 60*dur_cycle - sec_elapsed;
+
+    if( sec_remaining > 0 ){
+        showRemainingTime();
+        return;
+    }
+
     motoric.write(PUSH_BUTTON);
     delay(ONE_SECOND);
     motoric.write(IDLE_POSITION);
-    for (int i = 0; i < dur_cycle; i++){
-        for(int j = 0; j < 60; j++){
-            if (i == dur_cycle - 1 && j == 59)
-                continue;                    
-            delay(ONE_SECOND);
-            showElapsedTime();
-        }
-    }
+
+    time_since_last_click = millis();
+
     curr_cycle++;
     if (curr_cycle < num_cycles) // we must do more cycles, exit loop
         return;
-
     else 
         finishedProcedure();  
 }
 
 void finishedProcedure()
 {
-    motoric.write(PUSH_BUTTON);
-    delay(ONE_SECOND);
-    motoric.write(IDLE_POSITION);
     clearLCD();
     lcd.setCursor(0,0);
     lcd.print("Done all " + String(num_cycles) + "cycles");
